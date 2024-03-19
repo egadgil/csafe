@@ -7,8 +7,22 @@ import plotly.graph_objects as go
 
 app = Dash(__name__, suppress_callback_exceptions=True)
 
+def update_shapes_and_hovertext(fig, hover_data):
+    if hover_data:
+        x_coord = hover_data['points'][0]['x']
+        # Define the vertical line
+        vertical_line = dict(
+            type='line',
+            x0=x_coord,
+            x1=x_coord,
+           y0=min(fig.data[0].y),
+        y1=max(fig.data[0].y),
+            line=dict(color='red', width=2)
+        )
+        fig.update_layout(shapes=[vertical_line])
+     
+# Assuming data is loaded similarly to your original code
 data = pd.read_csv("results-viz.csv")
-
 metric_options = [
     {'label': 'nearest_points', 'value': 'nearest_points'},
     {'label': 'clique_size', 'value': 'clique_size'},
@@ -31,7 +45,6 @@ app.layout = html.Div([
     html.Div(id='dd-output-container'),
     dcc.Graph(id='combined-kde-plot')  # Single Graph for combined KDE plots
 ])
-
 
 
 @app.callback(
