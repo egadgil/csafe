@@ -2,6 +2,8 @@ from dash import dcc, html, Dash
 from dash.dependencies import Input, Output
 import plotly.express as px
 import pandas as pd
+import scipy.stats as stats
+import plotly.graph_objects as go
 
 app = Dash(__name__, suppress_callback_exceptions=True)
 
@@ -27,30 +29,49 @@ app.layout = html.Div([
         placeholder="Select a metric"
     ),
     html.Div(id='dd-output-container'),
-    dcc.Graph(id='kde-plot-true'),  # KDE plot for is_match True
-    dcc.Graph(id='kde-plot-false')  # KDE plot for is_match False
+    dcc.Graph(id='combined-kde-plot')  # Single Graph for combined KDE plots
 ])
 
+
+
 @app.callback(
-    [Output('kde-plot-true', 'figure'),
-     Output('kde-plot-false', 'figure')],
-    [Input('metric-dropdown', 'value')]
+    Output('combined-kde-plot', 'figure'),
+    [Input('metric-dropdown', 'value'),
+     Input('combined-kde-plot', 'hoverData')]
 )
-def update_kde_plots(metric_value):
-    if metric_value:
-        true_data = data[(data['metric'] == metric_value) & (data['is_match'] == True)]['score']
-        false_data = data[(data['metric'] == metric_value) & (data['is_match'] == False)]['score']
+def update_kde_plots(metric_value, hover_data):
+    if not metric_value:
+        empty_figure = go.Figure()
+        empty_figure.update_layout(title='Please select a metric')
+        return empty_figure
 
-        kde_true = px.density_contour(true_data, x='score', title=f'KDE Plot for {metric_value} (is_match True)')
-        kde_false = px.density_contour(false_data, x='score', title=f'KDE Plot for {metric_value} (is_match False)')
+    true_data = data[(data['metric'] == metric_value) & (data['is_match'] == True)]['score']
+    false_data = data[(data['metric'] == metric_value) & (data['is_match'] == False)]['score']
 
-        kde_true.update_traces(contours_coloring='fill', contours_showlabels=False)
-        kde_false.update_traces(contours_coloring='fill', contours_showlabels=False)
+    fig = go.Figure()
 
-        return kde_true, kde_false
-    else:
-        empty_figure = px.scatter(title='Please select a metric')
-        return empty_figure, empty_figure
+    # KDE for is_match True
+    kde_true = stats.gaussian_kde(true_data)
+    x_vals_true = true_data.sort_values()
+    y_vals_true = kde_true(x_vals_true)
+    fig.add_trace(go.Scatter(x=x_vals_true, y=y_vals_true, mode='lines', fill='tozeroy', name='is_match True', line=dict(color='red')))
+
+    # KDE for is_match False
+    kde_false = stats.gaussian_kde(false_data)
+    x_vals_false = false_data.sort_values()
+    y_vals_false = kde_false(x_vals_false)
+    fig.add_trace(go.Scatter(x=x_vals_false, y=y_vals_false, mode='lines', fill='tozeroy', name='is_match False', line=dict(color='blue')))
+
+    fig.update_layout(title=f'KDE Plot for {metric_value}', xaxis_title='Score', yaxis_title='Density')
+
+    # Check if hoverData is provided and valid
+    if hover_data and 'points' in hover_data and len(hover_data['points']) > 0:
+        hover_x = hover_data['points'][0]['x']
+        # Add vertical line at hover_x position
+        fig.add_shape(type="line", x0=hover_x, y0=0, x1=hover_x, y1=1,
+                      line=dict(color="Red", width=2), xref="x", yref="paper")
+
+    return fig
 
 if __name__ == '__main__':
     app.run_server(debug=True)
