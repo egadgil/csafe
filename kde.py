@@ -1,4 +1,4 @@
-from dash import Dash, dcc, html, Input, Output, callback_context
+from dash import Dash, dcc, html, Input, Output, State
 import plotly.graph_objects as go
 import pandas as pd
 import scipy.stats as stats
@@ -9,26 +9,7 @@ app = Dash(__name__, suppress_callback_exceptions=False)
 
 # Load your data
 data = pd.read_csv("results-viz.csv")
-def update_shapes_and_hovertext(fig, x_coord):
-    # Remove the vertical line if x_coord is None
-    if x_coord is None:
-        fig.update_layout(shapes=[])
-        return
 
-    # Add a vertical line at the hovered x-coordinate
-    vertical_line = dict(
-        type='line',
-        x0=x_coord,
-        x1=x_coord,
-        y0=0,
-        y1=max(fig.data[0].y),
-        line=dict(color='red', width=2)
-    )
-    fig.update_layout(shapes=[vertical_line])
-
-    # Add hover template
-    hovertext = [f"x: {x_coord:.2f}" for _ in range(len(fig.data[0].x))]
-    fig.data[0].update(hoverinfo='x+y', hovertext=hovertext)
 # Define options for the dropdown based on your metrics
 metric_options = [
     {'label': 'nearest_points', 'value': 'nearest_points'},
@@ -50,64 +31,54 @@ app.layout = html.Div([
         options=metric_options,
         placeholder="Select a metric"
     ),
-    dcc.Graph(id='combined-kde-plot')  # The graph for KDE plots
+    dcc.Graph(id='combined-kde-plot'),  # The graph for KDE plots
+    html.Div(id='ratio-display', style={'fontSize': 20, 'marginTop': 20})  # Display the ratio here
 ])
 
-# Define the server-side callback for updating the graph based on the selected metric
+# Callback to update the graph based on the selected metric and hover data
 @app.callback(
-    Output('combined-kde-plot', 'figure'),
+    [Output('combined-kde-plot', 'figure'),
+     Output('ratio-display', 'children')],
     [Input('metric-dropdown', 'value'),
-     Input('combined-kde-plot', 'hoverData')]  # Assuming hoverData is the property and 'graph-id' is the ID of the graph component
+     Input('combined-kde-plot', 'hoverData')]
 )
-def update_kde_plots(metric_value,hover_data):
+def update_kde_plots_and_display_ratio(metric_value, hoverData):
+    fig = go.Figure()
+    ratio_message = "Hover over a point to see the ratio."
+
     if metric_value:
         true_data = data[(data['metric'] == metric_value) & (data['is_match'] == True)]['score']
         false_data = data[(data['metric'] == metric_value) & (data['is_match'] == False)]['score']
 
-        fig = go.Figure()
-
-        # Plot for is_match True in red
         kde_true = stats.gaussian_kde(true_data)
-        x_vals_true = np.linspace(min(true_data), max(true_data), 1000)
-        y_vals_true = kde_true(x_vals_true)
-        fig.add_trace(go.Scatter(x=x_vals_true, y=y_vals_true, mode='lines', fill='tozeroy', name='is_match True', line=dict(color='red')))
-
-        # Plot for is_match False in blue
         kde_false = stats.gaussian_kde(false_data)
-        x_vals_false = np.linspace(min(false_data), max(false_data), 1000)
-        y_vals_false = kde_false(x_vals_false)
-        fig.add_trace(go.Scatter(x=x_vals_false, y=y_vals_false, mode='lines', fill='tozeroy', name='is_match False', line=dict(color='blue')))
+        x_vals = np.linspace(min(min(true_data), min(false_data)), max(max(true_data), max(false_data)), 1000)
+        y_vals_true = kde_true(x_vals)
+        y_vals_false = kde_false(x_vals)
+
+        fig.add_trace(go.Scatter(x=x_vals, y=y_vals_true, mode='lines', fill='tozeroy', name='is_match True', line=dict(color='red')))
+        fig.add_trace(go.Scatter(x=x_vals, y=y_vals_false, mode='lines', fill='tozeroy', name='is_match False', line=dict(color='blue')))
 
         fig.update_layout(title=f'KDE Plot for {metric_value}', xaxis_title='Score', yaxis_title='Density')
-        if hover_data:
-         x_coord_derivative = hover_data['points'][0]['x']
-         if x_coord_derivative is not None:
-        # Evaluate the y-coordinate for the KDE plots at x_coord_derivative
-          y_val_true = kde_true(x_coord_derivative)[0]  # Evaluate KDE for true_data
-          y_val_false = kde_false(x_coord_derivative)[0]  # Evaluate KDE for false_data
 
-        # Determine the maximum y-value to extend the vertical line
-          max_y_val = max(y_val_true, y_val_false)
+        if hoverData and 'points' in hoverData and len(hoverData['points']) > 0:
+            hovered_point_x = hoverData['points'][0]['x']
+            hovered_point_y_true = kde_true([hovered_point_x])[0]
+            hovered_point_y_false = kde_false([hovered_point_x])[0]
+            max_y_value = max(hovered_point_y_true, hovered_point_y_false)
+            
+            # Add vertical line at hovered x-coordinate
+            fig.add_shape(type="line", x0=hovered_point_x, y0=0, x1=hovered_point_x, y1=max_y_value,
+                          line=dict(color="Red", width=2),
+                          xref="x", yref="y")
 
-        # Define the vertical line with updated y1 to match the KDE plot's y-coordinate
-          vertical_line = dict(
-            type='line',
-            x0=x_coord_derivative,
-            x1=x_coord_derivative,
-            y0=0,
-            y1=max_y_val,  # Updated to extend to the correct y-value
-            line=dict(color='red', width=2)
-        )
-          fig.update_layout(shapes=[vertical_line])
+            # Calculate and display ratio if y_false is not 0
+            if hovered_point_y_false != 0:
+                ratio = hovered_point_y_true / hovered_point_y_false
+                ratio_message = f"Ratio of densities (True/False) at x={hovered_point_x:.2f}: {ratio:.2f}"
+            else:
+                ratio_message = "Hovered point y_false is 0, cannot calculate ratio."
 
-        # Add hover template
-          
-          
-         return fig
-        else:
-         return fig
-
-# Define the clientside callback for adding a dynamic hover line
-
+    return fig,ratio_message
 if __name__ == '__main__':
     app.run_server(debug=True)
