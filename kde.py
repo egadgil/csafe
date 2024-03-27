@@ -30,7 +30,7 @@ app.layout = html.Div([
     dcc.Dropdown(
         id='metric-dropdown',
         options=metric_options,
-        value='nearest_points',  # Optionally set a default value
+        value=None,  # Optionally set a default value
         placeholder="Select a metric"
     ),html.Div(id='ratio-display'),
     dcc.Graph(id='combined-kde-plot'),  # The graph for KDE plots
@@ -45,12 +45,12 @@ app.layout = html.Div([
             {'name': 'Blur', 'id': 'blur'},
             {'name': 'Extractor', 'id': 'extractor'}
         ],
-        data=[],  # Initial empty data
+        data=[],  
         style_table={'overflowX': 'auto'},
         style_cell={
             'height': 'auto',
             # all three widths are needed
-            'minWidth': '180px', 'width': '180px', 'maxWidth': '180px',
+            'minWidth': '100px', 'width': '100px', 'maxWidth': '100px',
             'whiteSpace': 'normal'
         }
     )
@@ -73,6 +73,7 @@ def update_kde_plots_and_display_ratio(metric_value, clickData):
 
     if metric_value:
         # KDE plot preparation
+        filtered_data = data[data['metric'] == metric_value].copy()
         true_data = data[(data['metric'] == metric_value) & (data['is_match'] == True)]['score']
         false_data = data[(data['metric'] == metric_value) & (data['is_match'] == False)]['score']
         kde_true = stats.gaussian_kde(true_data)
@@ -105,15 +106,16 @@ def update_kde_plots_and_display_ratio(metric_value, clickData):
                 ratio_text = "Ratio cannot be calculated (division by zero).\n\n"
             
             # Identify and display the top 5 closest points
-            data['x_distance'] = abs(data['score'] - clicked_point_x)
-            closest_points = data.sort_values(by='x_distance').head(5)
-            closest_points_message = "### Top 5 closest points:\n" + "\n".join([
-                        f"- **ID**: {row['cmpid']}, **Config**: {row['config']}, **Match**: {row['is_match']}, **Metric**: {row['metric']}, **Score**: {row['score']:.4f}, **Blur**: {row['blur']}, **Extractor**: {row['extractor']}" 
-            for _, row in closest_points.iterrows()
-        ])
+            filtered_data['x_distance'] = abs(filtered_data['score'] - clicked_point_x)
+            closest_points = filtered_data.sort_values(by='x_distance').head(5)
+            
             table_data = closest_points.to_dict('records')
         # Combine ratio text and closest points details
             ratio_message = ratio_text 
+    else:
+        # Optionally, you can adjust the figure or other outputs to indicate that no data is available
+        fig.update_layout(title="No metric selected", xaxis_title='Score', yaxis_title='Density')
+
 
     return fig, ratio_message,table_data
 
