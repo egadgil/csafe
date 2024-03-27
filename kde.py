@@ -1,4 +1,4 @@
-from dash import Dash, dcc, html, Input, Output, State
+from dash import Dash, dcc, html, Input, Output
 import plotly.graph_objects as go
 import pandas as pd
 import scipy.stats as stats
@@ -32,53 +32,66 @@ app.layout = html.Div([
         placeholder="Select a metric"
     ),
     dcc.Graph(id='combined-kde-plot'),  # The graph for KDE plots
-    html.Div(id='ratio-display', style={'fontSize': 20, 'marginTop': 20})  # Display the ratio here
+    dcc.Markdown(id='ratio-display', style={'fontSize': 20, 'marginTop': 20})  # Display the details here using Markdown
 ])
 
-# Callback to update the graph based on the selected metric and hover data
+# Callback to update the graph based on the selected metric and click data
 @app.callback(
     [Output('combined-kde-plot', 'figure'),
      Output('ratio-display', 'children')],
     [Input('metric-dropdown', 'value'),
-     Input('combined-kde-plot', 'hoverData')]
+     Input('combined-kde-plot', 'clickData')]
 )
-def update_kde_plots_and_display_ratio(metric_value, hoverData):
+def update_kde_plots_and_display_ratio(metric_value, clickData):
     fig = go.Figure()
-    ratio_message = "Hover over a point to see the ratio."
+    ratio_message = "Click on a point in the graph."
 
     if metric_value:
+        # KDE plot preparation
         true_data = data[(data['metric'] == metric_value) & (data['is_match'] == True)]['score']
         false_data = data[(data['metric'] == metric_value) & (data['is_match'] == False)]['score']
-
         kde_true = stats.gaussian_kde(true_data)
         kde_false = stats.gaussian_kde(false_data)
         x_vals = np.linspace(min(min(true_data), min(false_data)), max(max(true_data), max(false_data)), 1000)
         y_vals_true = kde_true(x_vals)
         y_vals_false = kde_false(x_vals)
 
-        fig.add_trace(go.Scatter(x=x_vals, y=y_vals_true, mode='lines', fill='tozeroy', name='is_match True', line=dict(color='red')))
-        fig.add_trace(go.Scatter(x=x_vals, y=y_vals_false, mode='lines', fill='tozeroy', name='is_match False', line=dict(color='blue')))
-
+        fig.add_trace(go.Scatter(x=x_vals, y=y_vals_true, mode='lines', fill='tozeroy', name='True', line=dict(color='red')))
+        fig.add_trace(go.Scatter(x=x_vals, y=y_vals_false, mode='lines', fill='tozeroy', name='False', line=dict(color='blue')))
         fig.update_layout(title=f'KDE Plot for {metric_value}', xaxis_title='Score', yaxis_title='Density')
 
-        if hoverData and 'points' in hoverData and len(hoverData['points']) > 0:
-            hovered_point_x = hoverData['points'][0]['x']
-            hovered_point_y_true = kde_true([hovered_point_x])[0]
-            hovered_point_y_false = kde_false([hovered_point_x])[0]
-            max_y_value = max(hovered_point_y_true, hovered_point_y_false)
+        if clickData and 'points' in clickData and len(clickData['points']) > 0:
+            clicked_point_x = clickData['points'][0]['x']
+            clicked_point_y_true = kde_true([clicked_point_x])[0]
+            clicked_point_y_false = kde_false([clicked_point_x])[0]
+            max_y_value = max(clicked_point_y_true, clicked_point_y_false)
+            # Mark the clicked x-coordinate with a vertical line
             
-            # Add vertical line at hovered x-coordinate
-            fig.add_shape(type="line", x0=hovered_point_x, y0=0, x1=hovered_point_x, y1=max_y_value,
+
+            # Calculate and display ratio of densities at the clicked x-coordinate
+            
+            fig.add_shape(type="line", x0=clicked_point_x, y0=0, x1=clicked_point_x, y1=max_y_value,
                           line=dict(color="Red", width=2),
                           xref="x", yref="y")
-
-            # Calculate and display ratio if y_false is not 0
-            if hovered_point_y_false != 0:
-                ratio = hovered_point_y_true / hovered_point_y_false
-                ratio_message = f"Ratio of densities (True/False) at x={hovered_point_x:.2f}: {ratio:.2f}"
+            if clicked_point_y_false != 0:
+                ratio = clicked_point_y_true / clicked_point_y_false
+                ratio_text = f"At x={clicked_point_x:.2f}: ratio of densities is {ratio:.2f}\n\n "
             else:
-                ratio_message = "Hovered point y_false is 0, cannot calculate ratio."
+                ratio_text = "Ratio cannot be calculated (division by zero).\n\n"
+            
+            # Identify and display the top 5 closest points
+            data['x_distance'] = abs(data['score'] - clicked_point_x)
+            closest_points = data.sort_values(by='x_distance').head(5)
+            closest_points_message = "### Top 5 closest points:\n" + "\n".join([
+                        f"- **ID**: {row['cmpid']}, **Config**: {row['config']}, **Match**: {row['is_match']}, **Metric**: {row['metric']}, **Score**: {row['score']:.4f}, **Blur**: {row['blur']}, **Extractor**: {row['extractor']}" 
+            for _, row in closest_points.iterrows()
+        ])
+        
+        # Combine ratio text and closest points details
+            ratio_message = ratio_text + closest_points_message
 
-    return fig,ratio_message
+    return fig, ratio_message
+
+
 if __name__ == '__main__':
     app.run_server(debug=True)
