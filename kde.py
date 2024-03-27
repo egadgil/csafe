@@ -3,6 +3,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import scipy.stats as stats
 import numpy as np
+from dash import dash_table
 
 # Initialize the Dash app
 app = Dash(__name__, suppress_callback_exceptions=False)
@@ -29,21 +30,45 @@ app.layout = html.Div([
     dcc.Dropdown(
         id='metric-dropdown',
         options=metric_options,
+        value='nearest_points',  # Optionally set a default value
         placeholder="Select a metric"
-    ),
+    ),html.Div(id='ratio-display'),
     dcc.Graph(id='combined-kde-plot'),  # The graph for KDE plots
-    dcc.Markdown(id='ratio-display', style={'fontSize': 20, 'marginTop': 20})  # Display the details here using Markdown
+    dash_table.DataTable(
+        id='closest-points-table',
+        columns=[  # Initial columns
+            {'name': 'ID', 'id': 'cmpid'},
+            {'name': 'Config', 'id': 'config'},
+            {'name': 'Match', 'id': 'is_match'},
+            {'name': 'Metric', 'id': 'metric'},
+            {'name': 'Score', 'id': 'score'},
+            {'name': 'Blur', 'id': 'blur'},
+            {'name': 'Extractor', 'id': 'extractor'}
+        ],
+        data=[],  # Initial empty data
+        style_table={'overflowX': 'auto'},
+        style_cell={
+            'height': 'auto',
+            # all three widths are needed
+            'minWidth': '180px', 'width': '180px', 'maxWidth': '180px',
+            'whiteSpace': 'normal'
+        }
+    )
 ])
+
 
 # Callback to update the graph based on the selected metric and click data
 @app.callback(
     [Output('combined-kde-plot', 'figure'),
-     Output('ratio-display', 'children')],
+     Output('ratio-display', 'children'),
+     Output('closest-points-table', 'data')],  # Add this line
     [Input('metric-dropdown', 'value'),
      Input('combined-kde-plot', 'clickData')]
 )
+
 def update_kde_plots_and_display_ratio(metric_value, clickData):
     fig = go.Figure()
+    table_data = []
     ratio_message = "Click on a point in the graph."
 
     if metric_value:
@@ -86,11 +111,11 @@ def update_kde_plots_and_display_ratio(metric_value, clickData):
                         f"- **ID**: {row['cmpid']}, **Config**: {row['config']}, **Match**: {row['is_match']}, **Metric**: {row['metric']}, **Score**: {row['score']:.4f}, **Blur**: {row['blur']}, **Extractor**: {row['extractor']}" 
             for _, row in closest_points.iterrows()
         ])
-        
+            table_data = closest_points.to_dict('records')
         # Combine ratio text and closest points details
-            ratio_message = ratio_text + closest_points_message
+            ratio_message = ratio_text 
 
-    return fig, ratio_message
+    return fig, ratio_message,table_data
 
 
 if __name__ == '__main__':
