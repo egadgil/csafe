@@ -24,6 +24,24 @@ metric_options = [
     {'label': 'MCNCC', 'value': 'MCNCC'},
     {'label': 'MCPOC', 'value': 'MCPOC'}
 ]
+extractor_options = [
+    {'label': 'AKAZE', 'value': 'AKAZE'},
+    {'label': 'CENSURE', 'value': 'CENSURE'},
+    {'label': 'FAST', 'value': 'FAST'},
+    {'label': 'KAZE', 'value': 'KAZE'},
+    {'label': 'Shi-Tomasi', 'value': 'Shi-Tomasi'},
+    {'label': 'SIFT', 'value': 'SIFT'},
+    {'label': 'SIFT+AKAZE', 'value': 'SIFT+AKAZE'},
+    {'label': 'SIFT+CENSURE', 'value': 'SIFT+CENSURE'},
+    {'label': 'SIFT+FAST', 'value': 'SIFT+FAST'},
+    {'label': 'SIFT+Fast+AKAZE', 'value': 'SIFT+Fast+AKAZE'},
+    {'label': 'SIFT+Fast+KAZE', 'value': 'SIFT+Fast+KAZE'},
+    {'label': 'SIFT+KAZE', 'value': 'SIFT+KAZE'},
+    {'label': 'SIFT+KAZE+AKAZE', 'value': 'SIFT+KAZE+AKAZE'}
+]
+
+
+
 
 # Define your Dash app layout
 app.layout = html.Div([
